@@ -1,92 +1,125 @@
-package net.penguincoders.doit.Utils;
+package net.penguincoders.doit;
 
-import android.content.ContentValues;
-import android.content.Context;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLite0penHelper;
+import android.app.Activity;
+import android.content.DialogInterface;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.EditText;
 
-import net.penguincoders.doit.Model.ToDoModel:
-  
-import java.util.ArrayList;
-import java.util.List;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
-public class DatabaseHandler extends SQLiteOpenHelper {
-  
-  private static final int VERSION = 1;
-  private static final String NAME ="toDoListDatabase";
-  private static final String TODO_TABLE="todo";
-  private static final String ID = "id";
-  private static final String TASK ="task";
-  private static final String STATUS = "status";
-  private static final CREATE TODO_TABLE = "CREATE TABLE+ TODO_TABLE + "(" + ID+ INTEGER PRIMARY KEY AUTOINCREMENT, "
-                                      +TASK +" TEXT," + STATUS + "INTEGER)";
-private SQLiteDatabase db;
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
-private DatabaseHandler (Context context) {
-  super(context, NAME, Factory: null, VERSION);
-}
+import net.penguincoders.doit.Adapters.ToDoAdapter;
+import net.penguincoders.doit.Model.ToDoModel;
+import net.penguincoders.doit.Utils.DatabaseHandler;
 
-@Override
-  public void onCreate(SQLiteDatabase db) {
-  db.execSQL(CREATE_TODO_TABLE);
-}
+import java.util.Objects;
 
-@Override
-  public void onUpgrade (SQLiteDatabase db, int oldVersion, int newVersion) {
-  //Drop the older tables 
-  db.execSOL("DROP TABLE IF EXISTS + TODO_TABLE);
-  //Create tabes again 
-  onCreate(db);
-}
-  public void openDatabase() {
-  db = this.getWritableDatabase();
-  }
+public class AddNewTask extends BottomSheetDialogFragment {
 
-public void insertTask(ToDoModel task) {
-  ContentValues cv = new ContentValues(); cv.put(TASK, task.getTask());
-cv.put(STATUS, 0);
-db.insert(TODO_TABLE, nullColumnHack: null, cv);
-}
+    public static final String TAG = "ActionBottomDialog";
+    private EditText newTaskText;
+    private Button newTaskSaveButton;
 
-public List<ToDoModel> getAllTasks() {
-  List<ToDoModel> taskList = new ArrayList<>();
-  Cursor cur null;
-  db.beginTransaction();
-  tryt cur db.query(TODO_TABLE, columns: null, selection: null, selectionArgs: null, groupBy:null, having:null, orderBy:null, limit:null);
-      if(cur != null) { 
-    if(cur.moveToFirst()) { 
-      do{
-        ToDoModel task = new ToDoModel();
-        task.setId(cur.getInt (cur.getColumnIndex(ID)));
-        task.setTask(cur.getString (cur.getColumnIndex(TASK)));
-        task.setStatus(cur.getInt (cur.getColumnIndex(STATUS)));
-        taskList.add(task);
-      } while(cur.moveToNext());
+    private DatabaseHandler db;
+
+    public static AddNewTask newInstance(){
+        return new AddNewTask();
     }
-      }
-}
-finally {
-  db.endTransaction();
-  cur.close();
-}
-  return taskList;
 
-}
-public void updateStatus(int id, int status) {
-  ContentValues cv = new ContentValues();
-  cv.put(STATUS, status);
-  db.update(TODO_TABLE, CV, whereClause: ID + "=?", new String[] {String.valueOf(id)});
-}
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setStyle(STYLE_NORMAL, R.style.DialogStyle);
+    }
 
-public void updateTask(int id, String task) {
-    ContentValues cv = new ContentValues();
-  cv.put (TASK, task);
-  db.update(TODO_TABLE, cv, whereClause: ID + "=?", new String[] {String.valueOf(id)});
-}
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
 
-public void deleteTask(int id) {
-    ContentValues cv = new ContentValues(){
-  db.delete(TODO_TABLE, cv, whereClause: ID + "=?", new String[] {String.valueOf(id)});
+        View view = inflater.inflate(R.layout.new_task, container, false);
+        getDialog().getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+
+        return view;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        newTaskText = Objects.requireNonNull(getView()).findViewById(R.id.newTaskText);
+        newTaskSaveButton = getView().findViewById(R.id.newTaskButton);
+
+        boolean isUpdate = false;
+
+        final Bundle bundle = getArguments();
+        if(bundle != null){
+            isUpdate = true;
+            String task = bundle.getString("task");
+            newTaskText.setText(task);
+            assert task != null;
+            if(task.length()>0)
+                newTaskSaveButton.setTextColor(ContextCompat.getColor(Objects.requireNonNull(getContext()), R.color.colorPrimaryDark));
+        }
+
+        db = new DatabaseHandler(getActivity());
+        db.openDatabase();
+
+        newTaskText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if(s.toString().equals("")){
+                    newTaskSaveButton.setEnabled(false);
+                    newTaskSaveButton.setTextColor(Color.GRAY);
+                }
+                else{
+                    newTaskSaveButton.setEnabled(true);
+                    newTaskSaveButton.setTextColor(ContextCompat.getColor(Objects.requireNonNull(getContext()), R.color.colorPrimaryDark));
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
+        });
+
+        final boolean finalIsUpdate = isUpdate;
+        newTaskSaveButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String text = newTaskText.getText().toString();
+                if(finalIsUpdate){
+                    db.updateTask(bundle.getInt("id"), text);
+                }
+                else {
+                    ToDoModel task = new ToDoModel();
+                    task.setTask(text);
+                    task.setStatus(0);
+                    db.insertTask(task);
+                }
+                dismiss();
+            }
+        });
+    }
+
+    @Override
+    public void onDismiss(@NonNull DialogInterface dialog){
+        Activity activity = getActivity();
+        if(activity instanceof DialogCloseListener)
+            ((DialogCloseListener)activity).handleDialogClose(dialog);
+    }
 }
-  }
