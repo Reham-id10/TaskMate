@@ -1,125 +1,105 @@
-package net.penguincoders.doit;
+package com.dbexample;
 
-import android.app.Activity;
-import android.content.DialogInterface;
-import android.graphics.Color;
-import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.EditText;
+import java.util.ArrayList;
+import java.util.List;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
 
-import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+public class DatabaseHandler extends SQLiteOpenHelper {
+	private static final String DATABASE_NAME = "db";
+	private String	TABLE_NAME = "";
+	private static final int DATABASE_VERSION = 1;
 
-import net.penguincoders.doit.Adapters.ToDoAdapter;
-import net.penguincoders.doit.Model.ToDoModel;
-import net.penguincoders.doit.Utils.DatabaseHandler;
+	private static final String KEY_ID = "id";
+	private static final String KEY_DESCRIPTION = "description";
+	private static final String KEY_TITLE = "name";
 
-import java.util.Objects;
+	public DatabaseHandler(Context context, String table_name) {
+		super(context, DATABASE_NAME, null, DATABASE_VERSION);
+		TABLE_NAME = table_name;
+		this.onCreate(this.getWritableDatabase());
+	}
 
-public class AddNewTask extends BottomSheetDialogFragment {
+	public String getDatabaseName() {
+		return DATABASE_NAME;
+	}
 
-    public static final String TAG = "ActionBottomDialog";
-    private EditText newTaskText;
-    private Button newTaskSaveButton;
+	@Override
+	public void onCreate(SQLiteDatabase db) {
+		String CREATE_CONTACTS_TABLE = "CREATE TABLE IF NOT EXISTS " + TABLE_NAME + "("
+				+ KEY_ID + " INTEGER PRIMARY KEY," + KEY_DESCRIPTION + " TEXT,"
+				+ KEY_TITLE + " TEXT" + ")";
+		db.execSQL(CREATE_CONTACTS_TABLE);
+	}
 
-    private DatabaseHandler db;
+	@Override
+	public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+		List<DataHandler> values_map = getValues();
 
-    public static AddNewTask newInstance(){
-        return new AddNewTask();
-    }
+		db.execSQL("DROP TABLE IF EXISTS " + TABLE_NAME);
 
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setStyle(STYLE_NORMAL, R.style.DialogStyle);
-    }
+		onCreate(db);
+		if (values_map.size() > 0){
+			for (DataHandler entry : values_map ) {
+				this.addValue(entry.title, entry.description);
+			}
+		}
+	}
 
-    @Nullable
-    @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
+	public boolean addValue(String title, String description){
+		SQLiteDatabase db = this.getWritableDatabase();
+		boolean ret_value = false;
 
-        View view = inflater.inflate(R.layout.new_task, container, false);
-        getDialog().getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+		ContentValues values = new ContentValues();
+		values.put(KEY_DESCRIPTION, description);
+		values.put(KEY_TITLE, title);
+		ret_value = (db.insert(TABLE_NAME, null, values) != -1);
+		db.close();
+		return ret_value;
+	}
 
-        return view;
-    }
+	public ArrayList<DataHandler> getValues() {
+		ArrayList<DataHandler>	ret = new ArrayList<DataHandler>();
+		int x = 0;
 
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        newTaskText = Objects.requireNonNull(getView()).findViewById(R.id.newTaskText);
-        newTaskSaveButton = getView().findViewById(R.id.newTaskButton);
+		String selectQuery = "SELECT  * FROM " + TABLE_NAME;
 
-        boolean isUpdate = false;
+		SQLiteDatabase db = this.getWritableDatabase();
+		Cursor cursor = db.rawQuery(selectQuery, null);
 
-        final Bundle bundle = getArguments();
-        if(bundle != null){
-            isUpdate = true;
-            String task = bundle.getString("task");
-            newTaskText.setText(task);
-            assert task != null;
-            if(task.length()>0)
-                newTaskSaveButton.setTextColor(ContextCompat.getColor(Objects.requireNonNull(getContext()), R.color.colorPrimaryDark));
-        }
+		if (cursor.moveToFirst()) {
+			do {
+				ret.add(new DataHandler(Integer.valueOf(cursor.getString(0)), cursor.getString(2), cursor.getString(1), x++));
+			} while (cursor.moveToNext());
+		}
+		return ret;
+	}
 
-        db = new DatabaseHandler(getActivity());
-        db.openDatabase();
+	public DataHandler	getValue(int id){
+		SQLiteDatabase db = this.getReadableDatabase();
 
-        newTaskText.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
+		Cursor cursor = db.query(TABLE_NAME, new String[] { KEY_ID,	KEY_DESCRIPTION, KEY_TITLE },
+				KEY_ID + "=?", new String[] { String.valueOf(id) },
+				null, null, null, null);
+		if (cursor == null)
+			return null;
 
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if(s.toString().equals("")){
-                    newTaskSaveButton.setEnabled(false);
-                    newTaskSaveButton.setTextColor(Color.GRAY);
-                }
-                else{
-                    newTaskSaveButton.setEnabled(true);
-                    newTaskSaveButton.setTextColor(ContextCompat.getColor(Objects.requireNonNull(getContext()), R.color.colorPrimaryDark));
-                }
-            }
+		DataHandler data = null;
 
-            @Override
-            public void afterTextChanged(Editable s) {
-            }
-        });
+		while (cursor.moveToNext()){
+			data = new DataHandler(Integer.valueOf(cursor.getString(0)), cursor.getString(1), cursor.getString(2));
+		}
+		return data;
+	}
 
-        final boolean finalIsUpdate = isUpdate;
-        newTaskSaveButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String text = newTaskText.getText().toString();
-                if(finalIsUpdate){
-                    db.updateTask(bundle.getInt("id"), text);
-                }
-                else {
-                    ToDoModel task = new ToDoModel();
-                    task.setTask(text);
-                    task.setStatus(0);
-                    db.insertTask(task);
-                }
-                dismiss();
-            }
-        });
-    }
+	public void	deleteData(int id){
+		SQLiteDatabase db = this.getWritableDatabase();
 
-    @Override
-    public void onDismiss(@NonNull DialogInterface dialog){
-        Activity activity = getActivity();
-        if(activity instanceof DialogCloseListener)
-            ((DialogCloseListener)activity).handleDialogClose(dialog);
-    }
+		db.delete(TABLE_NAME, KEY_ID + " = ?", new String[] { String.valueOf(id) });
+		db.close();
+	}
 }
